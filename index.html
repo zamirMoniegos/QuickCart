@@ -1,0 +1,413 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Barcode Scanner</title>
+    <script src="https://unpkg.com/@zxing/library@latest"></script>
+    <style>
+      html,
+      body {
+        height: 100%;
+        margin: 0;
+        padding: 0;
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+          Helvetica, Arial, sans-serif;
+        background-color: #f0f2f5;
+        overflow-x: hidden;
+      }
+
+      body {
+        display: flex;
+        flex-direction: column;
+      }
+
+      header,
+      footer {
+        background-color: #fff;
+        text-align: center;
+        padding: 12px 20px;
+        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+        flex-shrink: 0;
+        z-index: 10;
+      }
+
+      header h3 {
+        margin: 0;
+        font-size: 1.2rem;
+      }
+
+      button {
+        cursor: pointer;
+        padding: 10px 18px;
+        border: 1px solid #ccc;
+        border-radius: 8px;
+        background-color: #e9e9e9;
+        font-weight: bold;
+      }
+
+      button:hover {
+        background-color: #ddd;
+      }
+
+      #scanner-container {
+        flex-grow: 1;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        padding: 20px;
+        box-sizing: border-box;
+      }
+
+      .video-wrapper {
+        position: relative;
+        width: 90vw;
+        max-width: 500px;
+        aspect-ratio: 1 / 1;
+        border: 2px solid #ccc;
+        border-radius: 12px;
+        overflow: hidden;
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        background: black;
+      }
+
+      .video-wrapper video {
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+        display: block;
+      }
+
+      .laser-line {
+        position: absolute;
+        left: 0;
+        right: 0;
+        height: 2px;
+        background: linear-gradient(90deg, transparent, #ff3b30, transparent);
+        box-shadow: 0 0 8px #ff3b30;
+        animation: laserScan 2.5s infinite ease-in-out;
+      }
+
+      @keyframes laserScan {
+        0%,
+        100% {
+          top: 10%;
+        }
+        50% {
+          top: 90%;
+        }
+      }
+
+      .popup-overlay {
+        display: none;
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background: rgba(0, 0, 0, 0.5);
+        justify-content: center;
+        align-items: center;
+        z-index: 1000;
+        padding: 15px;
+        box-sizing: border-box;
+      }
+
+      .popup-content {
+        background: #fff;
+        padding: 25px;
+        border-radius: 12px;
+        width: 100%;
+        max-width: 400px;
+        box-shadow: 0 5px 15px rgba(0, 0, 0, 0.2);
+        text-align: center;
+      }
+
+      #popup-details {
+        display: flex;
+        flex-direction: column;
+        gap: 15px;
+        margin-bottom: 20px;
+        text-align: left;
+      }
+
+      .popup-row {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        font-size: clamp(0.9rem, 2.5vw, 1.2rem);
+        flex-wrap: wrap;
+        gap: 5px;
+      }
+
+      .popup-row span {
+        flex: 1;
+        min-width: 0;
+        overflow-wrap: break-word;
+        word-break: break-word;
+        text-align: right;
+      }
+      .popup-row span:first-child {
+        text-align: left;
+      }
+
+      .popup-row input[type="number"] {
+        width: 70px;
+        padding: 8px;
+        border: 1px solid #ccc;
+        border-radius: 5px;
+        text-align: center;
+        font-size: 1.1rem;
+      }
+
+      #popup-actions {
+        display: flex;
+        justify-content: flex-end;
+        gap: 10px;
+      }
+
+      #popup-actions .add-btn {
+        background-color: #007aff;
+        color: white;
+        border: none;
+      }
+
+      #not-found-popup .popup-content {
+        background: #f8d7da;
+        color: #721c24;
+        border: 1px solid #f5c6cb;
+      }
+
+      footer {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        flex-wrap: wrap;
+        gap: 15px;
+      }
+
+      .cart-button-wrapper {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        font-weight: bold;
+        font-size: 1.1rem;
+      }
+
+      .cart-button {
+        background: none;
+        border: none;
+        position: relative;
+        padding: 5px;
+      }
+
+      .badge {
+        position: absolute;
+        top: -5px;
+        right: -8px;
+        background: #ff3b30;
+        color: white;
+        font-weight: bold;
+        padding: 2px 6px;
+        border-radius: 50%;
+        font-size: 0.8rem;
+        border: 2px solid white;
+      }
+
+      #subtotal {
+        font-size: clamp(1rem, 3vw, 1.2rem);
+      }
+
+      #scan-status {
+        text-align: center;
+        padding: 5px;
+        color: #d9534f;
+        font-weight: bold;
+      }
+    </style>
+  </head>
+  <body>
+    <header>
+      <h3>QuickCart Scanner</h3>
+    </header>
+
+    <div id="scanner-container">
+      <div class="video-wrapper">
+        <video id="scanner"></video>
+        <div class="laser-line"></div>
+      </div>
+    </div>
+
+    <div id="scan-status"></div>
+
+    <div id="popup" class="popup-overlay">
+      <div class="popup-content">
+        <div id="popup-details">
+          <div class="popup-row">
+            <span>Description:</span>
+            <span id="popup-description"></span>
+          </div>
+          <div class="popup-row">
+            <span>Unit Price:</span>
+            <span id="popup-price"></span>
+          </div>
+          <div class="popup-row">
+            <label for="popup-qty">Quantity:</label>
+            <input type="number" id="popup-qty" value="1" min="1" />
+          </div>
+        </div>
+        <div id="popup-actions">
+          <button onclick="closePopup()">Cancel</button>
+          <button onclick="addToCart()" class="add-btn">Add to Cart</button>
+        </div>
+      </div>
+    </div>
+
+    <div id="not-found-popup" class="popup-overlay">
+      <div class="popup-content">
+        <p>Product not found.</p>
+        <button onclick="closeNotFound()">OK</button>
+      </div>
+    </div>
+
+    <footer>
+      <div class="cart-button-wrapper">
+        <span>Cart</span>
+        <button onclick="goToCart()" class="cart-button">
+          <img
+            src="https://img.icons8.com/ios-filled/50/000000/shopping-cart.png"
+            width="28"
+            alt="Shopping Cart"
+          />
+          <span id="cart-count" class="badge">0</span>
+        </button>
+      </div>
+      <div>Subtotal: <span id="subtotal">₱0.00</span></div>
+    </footer>
+
+    <audio id="beep-sound" src="beep.mp3" preload="auto"></audio>
+
+    <script>
+      const codeReader = new ZXing.BrowserMultiFormatReader();
+      const videoElement = document.getElementById("scanner");
+      const beepSound = document.getElementById("beep-sound");
+
+      let cart = JSON.parse(localStorage.getItem("cart") || "[]");
+      let currentProduct = null;
+
+      async function startScanner() {
+        try {
+          const devices = await codeReader.listVideoInputDevices();
+          if (devices.length === 0) {
+            document.getElementById("scan-status").textContent =
+              "No camera found.";
+            return;
+          }
+
+          const selectedDeviceId =
+            devices.find((d) => d.label.toLowerCase().includes("back"))
+              ?.deviceId || devices[0].deviceId;
+
+          await codeReader.decodeFromVideoDevice(
+            selectedDeviceId,
+            videoElement,
+            (result, err) => {
+              if (result) {
+                beepSound.play();
+                codeReader.reset();
+
+                // DEMO lookup: Replace with your DB fetch
+                if (result.text === "123456") {
+                  const product = {
+                    id: "123456",
+                    name: "Sample Item",
+                    price: "50.00",
+                  };
+                  showPopup(product);
+                } else {
+                  showNotFoundPopup();
+                }
+              }
+            }
+          );
+        } catch (err) {
+          console.error(err);
+          document.getElementById("scan-status").textContent =
+            "Camera access error.";
+        }
+      }
+
+      function updateCartSummary() {
+        let total = 0,
+          count = 0;
+        cart.forEach((item) => {
+          total += item.qty * parseFloat(item.price);
+          count += item.qty;
+        });
+        document.getElementById("cart-count").textContent = count;
+        document.getElementById("subtotal").textContent = `₱${total.toFixed(
+          2
+        )}`;
+      }
+
+      function goToCart() {
+        localStorage.setItem("cart", JSON.stringify(cart));
+        window.location.href = "cart.php";
+      }
+
+      function showPopup(product) {
+        currentProduct = product;
+        document.getElementById("popup-description").textContent = product.name;
+        document.getElementById("popup-price").textContent = `₱${parseFloat(
+          product.price
+        ).toFixed(2)}`;
+        document.getElementById("popup-qty").value = 1;
+        document.getElementById("popup").style.display = "flex";
+      }
+
+      function closePopup() {
+        currentProduct = null;
+        document.getElementById("popup").style.display = "none";
+        setTimeout(startScanner, 500);
+      }
+
+      function addToCart() {
+        const qty = parseInt(document.getElementById("popup-qty").value);
+        if (qty > 0 && currentProduct) {
+          const existingProductIndex = cart.findIndex(
+            (item) =>
+              item.id === currentProduct.id &&
+              item.price === currentProduct.price
+          );
+
+          if (existingProductIndex > -1) {
+            cart[existingProductIndex].qty += qty;
+          } else {
+            cart.push({ ...currentProduct, qty });
+          }
+
+          localStorage.setItem("cart", JSON.stringify(cart));
+          updateCartSummary();
+        }
+        closePopup();
+      }
+
+      function showNotFoundPopup() {
+        document.getElementById("not-found-popup").style.display = "flex";
+      }
+
+      function closeNotFound() {
+        document.getElementById("not-found-popup").style.display = "none";
+        setTimeout(startScanner, 500);
+      }
+
+      window.addEventListener("load", () => {
+        updateCartSummary();
+        startScanner();
+      });
+    </script>
+  </body>
+</html>
